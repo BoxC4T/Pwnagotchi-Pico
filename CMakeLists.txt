@@ -8,9 +8,19 @@ set(PICO_SDK_FETCH_FROM_GIT on)
 # note: this must happen before project()
 include(pico_sdk_import.cmake)
 
-project(my_project)
+project(pnwpico)
 
+set(PICO_BOARD pico_w)
 # initialize the Raspberry Pi Pico SDK
 pico_sdk_init()
 
 # rest of your project
+
+
+add_compile_options(-Wall
+        -Wno-format          # int != int32_t as far as the compiler is concerned because gcc has int32_t as long int
+        -Wno-unused-function # we have some for the docs that aren't called
+        -Wno-maybe-uninitialized
+        )
+
+add_subdirectory(pwnp)
