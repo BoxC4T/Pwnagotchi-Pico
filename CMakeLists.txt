@@ -24,3 +24,10 @@ add_compile_options(-Wall
         )
 
 add_subdirectory(pwnp)
+add_subdirectory(lib/Config)
+add_subdirectory(lib/e-Paper)
+add_subdirectory(lib/Fonts)
+add_subdirectory(lib/GUI)
+
+include_directories(./lib/Config)
+include_directories(./lib/GUI)
