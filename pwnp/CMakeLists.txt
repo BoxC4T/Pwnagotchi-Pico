@@ -16,6 +16,7 @@ target_link_libraries(pwnp
         Config 
         hardware_spi
         )
-
+#pico_enable_stdio_usb(pwnp 1)
+pico_enable_stdio_uart(pwnp 1)
 # create map/bin/hex file etc.
 pico_add_extra_outputs(pwnp)

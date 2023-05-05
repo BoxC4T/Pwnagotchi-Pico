@@ -15,12 +15,15 @@ static bool init_battery();
 static bool init_screen();
 static void main_loop();
 static void init_image();
+static void update_battery_display();
+static void update_face_display();
 UBYTE *BlackImage;
 int battery_percent = 100;
 
 
 
 int main() {
+    printf("Hello, world!\n");
     if (init_pico() == true) {
         if (init_battery() == true) {
             if (init_screen() == true) {
@@ -77,12 +80,15 @@ void update_battery_display(){
     free(str);
     // TODO
 }
+void update_face_display(){
+    Paint_DrawString_EN(10, 50, "(OwO)", &Font24, WHITE, BLACK);
+}
 
 
 
 void main_loop(){
     init_image();
-    EPD_2in13_V3_Display_Base(BlackImage);
+    EPD_2in13_V3_Display(BlackImage);
     
 }
 
@@ -90,10 +96,10 @@ void init_image(){
     Paint_NewImage(BlackImage, EPD_2in13_V3_WIDTH, EPD_2in13_V3_HEIGHT, 270, WHITE);  	
     Paint_SelectImage(BlackImage);
     Paint_Clear(WHITE);
-    Paint_DrawString_EN(180, 5, "HOSTNAME", &Font12, WHITE, BLACK);
+    Paint_DrawString_EN(10, 40, "HOSTNAME", &Font12, WHITE, BLACK);
     Paint_DrawLine(0,15,250,15, BLACK, DOT_PIXEL_1X1, LINE_STYLE_SOLID);
     Paint_DrawLine(0,107,250,107, BLACK, DOT_PIXEL_1X1, LINE_STYLE_SOLID);
-    Paint_DrawString_EN(20, 50, "(OwO)", &Font24, WHITE, BLACK);
     update_battery_display();
+    update_face_display();
 
 }
