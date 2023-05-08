@@ -2,7 +2,16 @@ from machine import Pin, SPI, I2C
 import framebuf
 import utime
 import time
+import network
+import socket
 
+led = Pin("LED", Pin.OUT)
+led.toggle()
+time.sleep(1)
+led.toggle()
+    
+    
+    
 WF_PARTIAL_2IN13_V3= [
     0x0,0x40,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,
     0x80,0x80,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,
@@ -54,317 +63,6 @@ RST_PIN         = 12
 DC_PIN          = 8
 CS_PIN          = 9
 BUSY_PIN        = 13
-
-class EPD_2in13_V3_Portrait(framebuf.FrameBuffer):
-    def __init__(self):
-        self.reset_pin = Pin(RST_PIN, Pin.OUT)
-        
-        self.busy_pin = Pin(BUSY_PIN, Pin.IN, Pin.PULL_UP)
-        self.cs_pin = Pin(CS_PIN, Pin.OUT)
-        if EPD_WIDTH % 8 == 0:
-            self.width = EPD_WIDTH
-        else :
-            self.width = (EPD_WIDTH // 8) * 8 + 8
-        self.height = EPD_HEIGHT
-        
-        self.full_lut = WF_PARTIAL_2IN13_V3
-        self.partial_lut = WS_20_30_2IN13_V3
-        
-        self.spi = SPI(1)
-        self.spi.init(baudrate=4000_000)
-        self.dc_pin = Pin(DC_PIN, Pin.OUT)
-
-        self.buffer = bytearray(self.height * self.width // 8)
-        super().__init__(self.buffer, self.width, self.height, framebuf.MONO_HLSB)
-        self.init()
-    
-    '''
-    function :Change the pin state
-    parameter:
-        pin : pin
-        value : state
-    '''
-    def digital_write(self, pin, value):
-        pin.value(value)
-
-    '''
-    function : Read the pin state 
-    parameter:
-        pin : pin
-    '''
-    def digital_read(self, pin):
-        return pin.value()
-
-    '''
-    function : The time delay function
-    parameter:
-        delaytime : ms
-    '''
-    def delay_ms(self, delaytime):
-        utime.sleep(delaytime / 1000.0)
-        
-    '''
-    function : Write data to SPI
-    parameter:
-        data : data
-    '''
-    def spi_writebyte(self, data):
-        self.spi.write(bytearray(data))
-
-    '''
-    function :Hardware reset
-    parameter:
-    '''
-    def reset(self):
-        self.digital_write(self.reset_pin, 1)
-        self.delay_ms(20)
-        self.digital_write(self.reset_pin, 0)
-        self.delay_ms(2)
-        self.digital_write(self.reset_pin, 1)
-        self.delay_ms(20)   
-
-    '''
-    function :send command
-    parameter:
-     command : Command register
-    '''
-    def send_command(self, command):
-        self.digital_write(self.dc_pin, 0)
-        self.digital_write(self.cs_pin, 0)
-        self.spi_writebyte([command])
-        self.digital_write(self.cs_pin, 1)
-    
-    '''
-    function :send data
-    parameter:
-     data : Write data
-    '''
-    def send_data(self, data):
-        self.digital_write(self.dc_pin, 1)
-        self.digital_write(self.cs_pin, 0)
-        self.spi_writebyte([data])
-        self.digital_write(self.cs_pin, 1)
-        
-    def send_data1(self, buf):
-        self.digital_write(self.dc_pin, 1)
-        self.digital_write(self.cs_pin, 0)
-        self.spi.write(bytearray(buf))
-        self.digital_write(self.cs_pin, 1)
-    
-    '''
-    function :Wait until the busy_pin goes LOW
-    parameter:
-    '''
-    def ReadBusy(self):
-        print('busy')
-        self.delay_ms(10)
-        while(self.digital_read(self.busy_pin) == 1):      # 0: idle, 1: busy
-            self.delay_ms(10)    
-        print('busy release')
-    
-    '''
-    function : Turn On Display
-    parameter:
-    '''
-    def TurnOnDisplay(self):
-        self.send_command(0x22)  # Display Update Control
-        self.send_data(0xC7)
-        self.send_command(0x20)  #  Activate Display Update Sequence    
-        self.ReadBusy()
-    
-    '''
-    function : Turn On Display Part
-    parameter:
-    '''
-    def TurnOnDisplayPart(self):
-        self.send_command(0x22)  # Display Update Control
-        self.send_data(0x0F)     # fast:0x0c, quality:0x0f, 0xcf
-        self.send_command(0x20)  # Activate Display Update Sequence 
-        self.ReadBusy()
-    
-    '''
-    function : Set lut
-    parameter:
-        lut : lut data
-    '''
-    def LUT(self, lut):
-        self.send_command(0x32)
-        self.send_data1(lut[0:153])
-        self.ReadBusy()
-    
-    '''
-    function : Send lut data and configuration
-    parameter:
-        lut : lut data 
-    '''
-    def LUT_by_host(self, lut):
-        self.LUT(lut)             # lut
-        self.send_command(0x3F)
-        self.send_data(lut[153])
-        self.send_command(0x03)   # gate voltage
-        self.send_data(lut[154])
-        self.send_command(0x04)   # source voltage
-        self.send_data(lut[155])  # VSH
-        self.send_data(lut[156])  # VSH2
-        self.send_data(lut[157])  # VSL
-        self.send_command(0x2C)   # VCOM
-        self.send_data(lut[158])
-    
-    '''
-    function : Setting the display window
-    parameter:
-        Xstart : X-axis starting position
-        Ystart : Y-axis starting position
-        Xend : End position of X-axis
-        Yend : End position of Y-axis
-    '''
-    def SetWindows(self, Xstart, Ystart, Xend, Yend):
-        self.send_command(0x44)                #  SET_RAM_X_ADDRESS_START_END_POSITION
-        self.send_data((Xstart >> 3) & 0xFF)
-        self.send_data((Xend >> 3) & 0xFF)
-        
-        self.send_command(0x45)                #  SET_RAM_Y_ADDRESS_START_END_POSITION
-        self.send_data(Ystart & 0xFF)
-        self.send_data((Ystart >> 8) & 0xFF)
-        self.send_data(Yend & 0xFF)
-        self.send_data((Yend >> 8) & 0xFF)
-        
-    '''
-    function : Set Cursor
-    parameter:
-        Xstart : X-axis starting position
-        Ystart : Y-axis starting position
-    '''
-    def SetCursor(self, Xstart, Ystart):
-        self.send_command(0x4E)             #  SET_RAM_X_ADDRESS_COUNTER
-        self.send_data(Xstart & 0xFF)
-        
-        self.send_command(0x4F)             #  SET_RAM_Y_ADDRESS_COUNTER
-        self.send_data(Ystart & 0xFF)
-        self.send_data((Ystart >> 8) & 0xFF)
-
-    '''
-    function : Initialize the e-Paper register
-    parameter:
-    '''
-    def init(self):
-        print('init')
-        self.reset()
-        self.delay_ms(100)
-        
-        self.ReadBusy()
-        self.send_command(0x12)  # SWRESET
-        self.ReadBusy()
-        
-        self.send_command(0x01)  # Driver output control 
-        self.send_data(0xf9)
-        self.send_data(0x00)
-        self.send_data(0x00)
-        
-        self.send_command(0x11)  #data entry mode 
-        self.send_data(0x03)
-        
-        self.SetWindows(0, 0, self.width-1, self.height-1)
-        self.SetCursor(0, 0)
-        
-        self.send_command(0x3C)  # BorderWaveform
-        self.send_data(0x05)
-        
-        self.send_command(0x21) # Display update control
-        self.send_data(0x00)
-        self.send_data(0x80)
-        
-        self.send_command(0x18) # Read built-in temperature sensor
-        self.send_data(0x80)
-        
-        self.ReadBusy()
-        self.LUT_by_host(self.partial_lut)
-       
-    '''
-    function : Clear screen
-    parameter:
-    '''
-    def Clear(self):
-        self.send_command(0x24)
-        self.send_data1([0xff] * self.height * int(self.width / 8))
-                
-        self.TurnOnDisplay()    
-    
-    '''
-    function : Sends the image buffer in RAM to e-Paper and displays
-    parameter:
-        image : Image data
-    '''
-    def display(self, image):
-        self.send_command(0x24)
-        self.send_data1(image)
-                
-        self.TurnOnDisplay()
-    
-    '''
-    function : Refresh a base image
-    parameter:
-        image : Image data
-    '''
-    def Display_Base(self, image):
-        self.send_command(0x24)
-        self.send_data1(image)
-                
-        self.send_command(0x26)
-        self.send_data1(image)
-                
-        self.TurnOnDisplay()
-        
-    '''
-    function : Sends the image buffer in RAM to e-Paper and partial refresh
-    parameter:
-        image : Image data
-    '''    
-    def display_Partial(self, image):
-        self.digital_write(self.reset_pin, 0)
-        self.delay_ms(1)
-        self.digital_write(self.reset_pin, 1)
-        
-        self.LUT_by_host(self.full_lut)
-        
-        self.send_command(0x37)
-        self.send_data(0x00)
-        self.send_data(0x00)
-        self.send_data(0x00)
-        self.send_data(0x00)
-        self.send_data(0x00)
-        self.send_data(0x40)
-        self.send_data(0x00)
-        self.send_data(0x00)
-        self.send_data(0x00)
-        self.send_data(0x00)
-        self.send_data(0x00)
-        
-        self.send_command(0x3C)
-        self.send_data(0x80)
-        
-        self.send_command(0x22)
-        self.send_data(0xC0)
-        self.send_command(0x20)
-        self.ReadBusy()
-        
-        self.SetWindows(0,0,self.width-1,self.height-1)
-        self.SetCursor(0,0)
-        
-        self.send_command(0x24)
-        self.send_data1(image)
-
-        self.TurnOnDisplayPart()
-    
-    '''
-    function : Enter sleep mode
-    parameter:
-    '''
-    def sleep(self):
-        self.send_command(0x10) #enter deep sleep
-        self.send_data(0x01)
-        self.delay_ms(100)
-        
 
 class EPD_2in13_V3_Landscape(framebuf.FrameBuffer):
     def __init__(self):
@@ -429,11 +127,11 @@ class EPD_2in13_V3_Landscape(framebuf.FrameBuffer):
         self.digital_write(self.cs_pin, 1)
 
     def ReadBusy(self):
-        print('busy')
+        #print('busy')
         self.delay_ms(10)
         while(self.digital_read(self.busy_pin) == 1):      # 0: idle, 1: busy
             self.delay_ms(10)    
-        print('busy release')
+        #print('busy release')
 
     def TurnOnDisplay(self):
         self.send_command(0x22)  # Display Update Control
@@ -667,33 +365,6 @@ class INA219:
            overflow occurs at 3.2A.
            ..note :: These calculations assume a 0.1 shunt ohm resistor is present
         """
-        # By default we use a pretty huge range for the input voltage,
-        # which probably isn't the most appropriate choice for system
-        # that don't use a lot of power.  But all of the calculations
-        # are shown below if you want to change the settings.  You will
-        # also need to change any relevant register settings, such as
-        # setting the VBUS_MAX to 16V instead of 32V, etc.
-
-        # VBUS_MAX = 32V             (Assumes 32V, can also be set to 16V)
-        # VSHUNT_MAX = 0.32          (Assumes Gain 8, 320mV, can also be 0.16, 0.08, 0.04)
-        # RSHUNT = 0.1               (Resistor value in ohms)
-
-        # 1. Determine max possible current
-        # MaxPossible_I = VSHUNT_MAX / RSHUNT
-        # MaxPossible_I = 3.2A
-
-        # 2. Determine max expected current
-        # MaxExpected_I = 2.0A
-
-        # 3. Calculate possible range of LSBs (Min = 15-bit, Max = 12-bit)
-        # MinimumLSB = MaxExpected_I/32767
-        # MinimumLSB = 0.000061              (61uA per bit)
-        # MaximumLSB = MaxExpected_I/4096
-        # MaximumLSB = 0,000488              (488uA per bit)
-
-        # 4. Choose an LSB between the min and max values
-        #    (Preferrably a roundish number close to MinLSB)
-        # CurrentLSB = 0.0001 (100uA per bit)
         self._current_lsb = 1  # Current LSB = 100uA per bit
 
         # 5. Compute the calibration register
@@ -707,30 +378,6 @@ class INA219:
         # PowerLSB = 0.002 (2mW per bit)
         self._power_lsb = .002  # Power LSB = 2mW per bit
 
-        # 7. Compute the maximum current and shunt voltage values before overflow
-        #
-        # Max_Current = Current_LSB * 32767
-        # Max_Current = 3.2767A before overflow
-        #
-        # If Max_Current > Max_Possible_I then
-        #    Max_Current_Before_Overflow = MaxPossible_I
-        # Else
-        #    Max_Current_Before_Overflow = Max_Current
-        # End If
-        #
-        # Max_ShuntVoltage = Max_Current_Before_Overflow * RSHUNT
-        # Max_ShuntVoltage = 0.32V
-        #
-        # If Max_ShuntVoltage >= VSHUNT_MAX
-        #    Max_ShuntVoltage_Before_Overflow = VSHUNT_MAX
-        # Else
-        #    Max_ShuntVoltage_Before_Overflow = Max_ShuntVoltage
-        # End If
-
-        # 8. Compute the Maximum Power
-        # MaximumPower = Max_Current_Before_Overflow * VBUS_MAX
-        # MaximumPower = 3.2 * 32V
-        # MaximumPower = 102.4W
 
         # Set Calibration register to 'Cal' calculated above
         self.write(_REG_CALIBRATION,self._cal_value)
@@ -765,29 +412,62 @@ class INA219:
         return value * self._current_lsb
     
     
-if __name__=='__main__':
-     
-    # Create an ADS1115 ADC (16-bit) instance.
-    ina219 = INA219(addr=0x43)
-    epd = EPD_2in13_V3_Landscape()
+curSP = 0
+f = open('data.txt')
+totDP = f.read()
+totDP = int(totDP)
+f.close()
     
+crackedNetworks = []
+    
+def newPwn():
+    global curSP, totDP
+    curSP += 1
+#   totDP += 1
+#     f = open('data.txt', 'w')
+#     f.write(str(totDP))
+#     f.close()
+    
+    
+    
+    
+def conOpen(innet):
+     for net in innet:
+        ssid, bssid, channel, RSSI, security, hidden = net
+        print(net)
+        if security == 0:
+            if ssid not in crackedNetworks:
+                crackedNetworks.append
+                newPwn()
+            
 
+ina219 = INA219(addr=0x43)
+epd = EPD_2in13_V3_Landscape()
+epd.Clear()
+epd.fill(0xff)
     
-    while True:
-        epd.Clear()
-        epd.fill(0xff)
+wlan = network.WLAN(network.STA_IF)
+wlan.active(True)
     
-        bus_voltage = ina219.getBusVoltage_V()             # voltage on V- (load side)
-        current = ina219.getCurrent_mA()                   # current in mA
-        P = (bus_voltage -3)/1.2*100
-        if(P<0):P=0
-        elif(P>100):P=100
-
-        # INA219 measure bus voltage on the load side. So PSU voltage = bus_voltage + shunt_voltage
-        print("Voltage:  {:6.3f} V".format(bus_voltage))
-        print("Current:  {:6.3f} A".format(current/1000))
-        print("Percent:  {:6.1f} %".format(P))
-        print("")
-        epd.text("Percent:  {:6.1f} %".format(P), 0, 10, 0x00)
-        epd.display(epd.buffer)
-        time.sleep(5)
+while True:
+    epd.init()
+    nets = wlan.scan()
+    bus_voltage = ina219.getBusVoltage_V()             # voltage on V- (load side)
+    current = ina219.getCurrent_mA()                   # current in mA
+    P = (bus_voltage -3)/1.2*100
+    if(P<0):P=0
+    elif(P>100):P=100
+    epd.Clear()
+    epd.fill(0xff)
+    epd.text("{:6.1f} %".format(P), 170, 10, 0x00)
+    epd.text("HOSTNAME", 10, 40, 0x00)
+    epd.text("pawd:" + str(curSP) + "(" + str(totDP) + ")" , 5, 120, 0x00)
+    epd.line(0, 20, 250, 20, 0x00)
+    epd.line(0, 112, 250, 112, 0x00)
+    epd.display(epd.buffer)
+    print("test2")
+    conOpen(nets)
+    #break
+    epd.sleep()
+    time.sleep(180)
+        
