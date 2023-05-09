@@ -414,40 +414,47 @@ class INA219:
     
     
 curSP = 0
-f = open('data.txt')
-totDP = f.read()
-totDP = int(totDP)
-f.close()
+lp = ""
     
 crackedNetworks = []
     
 def newPwn():
-    global curSP, totDP
+    global curSP, totDP, mood
     curSP += 1
-#   totDP += 1
-#     f = open('data.txt', 'w')
-#     f.write(str(totDP))
-#     f.close()
+    mood += 10
     
     
+  
+mood = 0  
+def genFace():
+    global mood
+    if mood >=0:
+        if mood < 5:
+            epd.text("(-_-)", 20, 60, 0x00)
+        if mood < 10:
+            epd.text("(o_o)", 20, 60, 0x00)
+        if mood < 15:
+            epd.text("(^_^)", 20, 60, 0x00)
+            
     
+  
     
 def conOpen(innet):
-    global wlan
+    global wlan, lp
     for net in innet:
         ssid, bssid, channel, RSSI, security, hidden = net
-        if security == 0 and ssid != "b''":
+        #print(net)
+        if security == 0 and bytes.decode(ssid) != "":
             if ssid not in crackedNetworks:
                 wlan.connect(ssid)
                 time.sleep(5)
                 if wlan.isconnected():
+                    lp = bytes.decode(ssid)
                     print("Pwned " + bytes.decode(ssid) + "!")
                     crackedNetworks.append(ssid)
                     newPwn()
                     wlan.disconnect()
-                
-            
-
+                    
 ina219 = INA219(addr=0x43)
 epd = EPD_2in13_V3_Landscape()
 epd.Clear()
@@ -459,6 +466,7 @@ while True:
     machine.freq(125000000)
     epd.init()
     nets = wlan.scan()
+    conOpen(nets)
     bus_voltage = ina219.getBusVoltage_V()             # voltage on V- (load side)
     current = ina219.getCurrent_mA()                   # current in mA
     P = (bus_voltage -3)/1.2*100
@@ -468,11 +476,14 @@ while True:
     epd.fill(0xff)
     epd.text("{:6.1f}%".format(P), 170, 10, 0x00)
     epd.text("HOSTNAME", 10, 40, 0x00)
-    epd.text("pawd:" + str(curSP) + "(" + str(totDP) + ")" , 5, 120, 0x00)
+    epd.text("pawd:" + lp + "(" + str(curSP) + ")" , 5, 120, 0x00)
+    epd.text("mood:" + str(mood), 10, 30, 0x00)
     epd.line(0, 20, 250, 20, 0x00)
     epd.line(0, 112, 250, 112, 0x00)
+    genFace()
     epd.display(epd.buffer)
-    conOpen(nets)
+    if mood > 0:
+        mood -= (1/4)
     #break
     epd.sleep()
     machine.freq(25000000)
