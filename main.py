@@ -4,7 +4,8 @@ import utime
 import time
 import network
 import socket
-
+machine.freq(125000000)
+print("Starting")
 led = Pin("LED", Pin.OUT)
 led.toggle()
 time.sleep(1)
@@ -183,7 +184,7 @@ class EPD_2in13_V3_Landscape(framebuf.FrameBuffer):
         self.send_data((Ystart >> 8) & 0xFF)
 
     def init(self):
-        print('init')
+        #print('init')
         self.reset()
         self.delay_ms(100)
         
@@ -432,24 +433,30 @@ def newPwn():
     
     
 def conOpen(innet):
-     for net in innet:
+    global wlan
+    for net in innet:
         ssid, bssid, channel, RSSI, security, hidden = net
-        print(net)
-        if security == 0:
+        if security == 0 and ssid != "b''":
             if ssid not in crackedNetworks:
-                crackedNetworks.append
-                newPwn()
+                wlan.connect(ssid)
+                time.sleep(5)
+                if wlan.isconnected():
+                    print("Pwned " + bytes.decode(ssid) + "!")
+                    crackedNetworks.append(ssid)
+                    newPwn()
+                    wlan.disconnect()
+                
             
 
 ina219 = INA219(addr=0x43)
 epd = EPD_2in13_V3_Landscape()
 epd.Clear()
 epd.fill(0xff)
-    
 wlan = network.WLAN(network.STA_IF)
 wlan.active(True)
     
 while True:
+    machine.freq(125000000)
     epd.init()
     nets = wlan.scan()
     bus_voltage = ina219.getBusVoltage_V()             # voltage on V- (load side)
@@ -459,15 +466,15 @@ while True:
     elif(P>100):P=100
     epd.Clear()
     epd.fill(0xff)
-    epd.text("{:6.1f} %".format(P), 170, 10, 0x00)
+    epd.text("{:6.1f}%".format(P), 170, 10, 0x00)
     epd.text("HOSTNAME", 10, 40, 0x00)
     epd.text("pawd:" + str(curSP) + "(" + str(totDP) + ")" , 5, 120, 0x00)
     epd.line(0, 20, 250, 20, 0x00)
     epd.line(0, 112, 250, 112, 0x00)
     epd.display(epd.buffer)
-    print("test2")
     conOpen(nets)
     #break
     epd.sleep()
+    machine.freq(25000000)
     time.sleep(180)
         
