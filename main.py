@@ -1,16 +1,19 @@
-from machine import Pin, SPI, I2C
+from machine import Pin, SPI, I2C, ADC
 import framebuf
 import utime
 import time
 import network
 import socket
+import gc
 machine.freq(125000000)
 print("Starting")
 led = Pin("LED", Pin.OUT)
 led.toggle()
 time.sleep(1)
 led.toggle()
-    
+print(f"Memory: {gc.mem_alloc()} of {gc.mem_free()} bytes used.")
+print(f"CPU Freq: {machine.freq()/1000000}Mhz")
+print(f"CPU Temp: {27 - ((machine.ADC(4).read_u16() * (3.3 / (65535))) - 0.706)/ 0.001721 }C") 
     
     
 WF_PARTIAL_2IN13_V3= [
@@ -419,7 +422,7 @@ lp = ""
 crackedNetworks = []
     
 def newPwn():
-    global curSP, totDP, mood
+    global curSP, mood
     curSP += 1
     mood += 10
     
@@ -435,6 +438,8 @@ def genFace():
             epd.text("(o_o)", 20, 60, 0x00)
         if mood < 15:
             epd.text("(^_^)", 20, 60, 0x00)
+        if mood < 20:
+            epd.text("(x_x)", 20, 60, 0x00)
             
     
   
@@ -461,9 +466,14 @@ epd.Clear()
 epd.fill(0xff)
 wlan = network.WLAN(network.STA_IF)
 wlan.active(True)
-    
+
+oldP = ""
+oldmood = ""
+oldsp = ""
+
 while True:
-    machine.freq(125000000)
+    #machine.freq(125000000)
+    
     epd.init()
     nets = wlan.scan()
     conOpen(nets)
@@ -474,18 +484,20 @@ while True:
     elif(P>100):P=100
     epd.Clear()
     epd.fill(0xff)
-    epd.text("{:6.1f}%".format(P), 170, 10, 0x00)
-    epd.text("HOSTNAME", 10, 40, 0x00)
-    epd.text("pawd:" + lp + "(" + str(curSP) + ")" , 5, 120, 0x00)
-    epd.text("mood:" + str(mood), 10, 30, 0x00)
+    epd.text("{:6.1f}%".format(P), 170, 10, 0x00) #battery %
+    epd.text("Picogotachi", 10, 40, 0x00)
+    epd.text("pawd:" + lp + "(" + str(curSP) + ")" , 5, 120, 0x00) #pwned ssid and amt pwned
+    #epd.text("mood:" + str(mood), 10, 30, 0x00)
     epd.line(0, 20, 250, 20, 0x00)
     epd.line(0, 112, 250, 112, 0x00)
     genFace()
-    epd.display(epd.buffer)
+    if oldP != P or oldmood != mood or oldsp != curSP:
+        epd.display(epd.buffer)
     if mood > 0:
-        mood -= (1/4)
-    #break
+        mood /= 4
     epd.sleep()
-    machine.freq(25000000)
-    time.sleep(180)
+    oldp = P
+    oldmood = mood
+    oldsp = curSP
+    machine.lightsleep(180000)
         
