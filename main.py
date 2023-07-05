@@ -499,5 +499,5 @@ while True:
     oldp = P
     oldmood = mood
     oldsp = curSP
-    machine.lightsleep(180000)
+    machine.lightsleep(300000)
         
